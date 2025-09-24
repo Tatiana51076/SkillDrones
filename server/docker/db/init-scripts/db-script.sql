@@ -26,7 +26,7 @@ CREATE INDEX idx_regions_geometry ON regions USING GIST (geometry);
 -- Таблица пользователей (операторы, аналитики, администраторы)
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGSERIAL PRIMARY KEY,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('OPERATOR', 'ANALYST', 'ADMIN')),
+    role VARCHAR(50) NOT NULL CHECK (role IN ('OPERATOR', 'ANALYST', 'ADMIN'))
                              );
 
 -- Индекс для быстрого поиска по имени пользователя
@@ -53,11 +53,11 @@ CREATE INDEX idx_report_log_period ON report_log(report_period_start, report_per
 CREATE INDEX idx_report_log_status ON report_log(status);
 CREATE INDEX idx_report_log_created_at ON report_log(created_at);
 
-- Создание таблицы обработанных полетов с дополнительными метриками
+-- Создание таблицы обработанных полетов с дополнительными метриками
 CREATE TABLE IF NOT EXISTS flights (
     flight_id BIGSERIAL PRIMARY KEY,
     drone_id INT
-    raw_id BIGINT REFERENCES raw_telegrams(id),
+    raw_id BIGINT REFERENCES,
 
     -- Основная информация о полете
     flight_code VARCHAR(100), -- ID полета из телеграммы
@@ -77,8 +77,8 @@ CREATE TABLE IF NOT EXISTS flights (
     arrival_point GEOMETRY(Point, 4326),
 
     -- Геопривязка к регионам
-    departure_region_id BIGINT REFERENCES regions(region_id),
-    arrival_region_id BIGINT REFERENCES regions(region_id),
+    departure_region_id BIGINT REFERENCES,
+    arrival_region_id BIGINT REFERENCES,
 
 -- Технические поля
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -95,8 +95,8 @@ CREATE INDEX idx_flights_drone_type ON flights(drone_type);
 
 -- Таблица для хранения предварительно рассчитанных метрик (оптимизация производительности)
 CREATE TABLE IF NOT EXISTS region_metrics (
-                                              metric_id BIGSERIAL PRIMARY KEY,
-                                              region_id BIGINT REFERENCES regions(region_id),
+    metric_id BIGSERIAL PRIMARY KEY,
+    region_id BIGINT REFERENCES regions(region_id),
     metric_date DATE NOT NULL, -- Дата расчета метрик
     metric_type VARCHAR(50) NOT NULL, -- Тип метрики: daily_flights, flight_density, etc.
 
