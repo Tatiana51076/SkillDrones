@@ -116,3 +116,6 @@ CREATE TABLE IF NOT EXISTS region_metrics (
 -- Индексы для быстрого доступа к метрикам
 CREATE INDEX idx_region_metrics_composite ON region_metrics(region_id, metric_date, metric_type);
 CREATE UNIQUE INDEX idx_region_metrics_unique ON region_metrics(region_id, metric_date, metric_type);
+
+
+
