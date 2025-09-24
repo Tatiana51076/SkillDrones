@@ -56,8 +56,8 @@ CREATE INDEX idx_report_log_created_at ON report_log(created_at);
 -- Создание таблицы обработанных полетов с дополнительными метриками
 CREATE TABLE IF NOT EXISTS flights (
     flight_id BIGSERIAL PRIMARY KEY,
-    drone_id INT
-    raw_id BIGINT REFERENCES,
+    drone_id INT,
+    raw_id BIGINT REFERENCES raw_telegrams(id),
 
     -- Основная информация о полете
     flight_code VARCHAR(100), -- ID полета из телеграммы
@@ -77,8 +77,8 @@ CREATE TABLE IF NOT EXISTS flights (
     arrival_point GEOMETRY(Point, 4326),
 
     -- Геопривязка к регионам
-    departure_region_id BIGINT REFERENCES,
-    arrival_region_id BIGINT REFERENCES,
+    departure_region_id BIGINT REFERENCES regions(region_id),
+    arrival_region_id BIGINT REFERENCES regions(region_id),
 
 -- Технические поля
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
