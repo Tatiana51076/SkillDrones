@@ -1,0 +1,82 @@
+@use "../../styles/variables" as v;
+@use "../../styles/mixins" as m;
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 28px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color v.$transition-300;
+  text-decoration: none;
+  position: relative;
+  padding: 16px 22px;
+
+  &--primary {
+    background-color: v.$color-cornflower-blue;
+    color: v.$color-white;
+
+    &:hover:not(:disabled) {
+      background-color: v.$color-white;
+      color: v.$color-black;
+    }
+
+    &:disabled {
+      background-color: v.$color-mulled-wine;
+      color: v.$color-white-50;
+      cursor: not-allowed;
+    }
+  }
+
+  &--secondary {
+    background-color: v.$color-iridium;
+    color: v.$color-white;
+
+    &:hover:not(:disabled) {
+      background-color: v.$color-white;
+      color: v.$color-black;
+    }
+
+    &:disabled {
+      background-color: v.$color-smokey-grey;
+      color: v.$color-white-50;
+      cursor: not-allowed;
+    }
+  }
+
+  &--small {
+    padding: 16px 22px;
+  }
+
+  &--medium {
+    padding: 16px 48px;
+
+    @include m.vp-767 {
+      padding: 16px 40px;
+    }
+  }
+
+  &--large {
+    padding: 20px 24px;
+  }
+
+  &--fullWidth {
+    width: 100%;
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+  }
+
+  &__text {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    line-height: 24px;
+  }
+}

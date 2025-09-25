@@ -1,0 +1,41 @@
+@use "_variables" as v;
+@use "_fonts" as f;
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  font-family: v.$ff-main, Arial, sans-serif;
+  line-height: 1.2;
+  font-weight: 400;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  color: v.$color-black;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+a {
+  color: v.$color-black;
+  text-decoration: inherit;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: v.$color-white;
+}
+
+main {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}

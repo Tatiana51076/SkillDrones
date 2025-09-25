@@ -1,0 +1,85 @@
+@use "../../styles/variables" as v;
+@use "../../styles/mixins" as m;
+
+.customInput {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+
+  &--dark {
+    .customInput__field {
+      background-color: v.$color-iridium;
+      color: v.$color-white;
+
+      &::placeholder {
+        color: v.$color-white-50;
+      }
+    }
+
+    .customInput__icon {
+      color: v.$color-white-50;
+    }
+  }
+
+  &--error {
+    .customInput__field {
+      border-color: v.$color-salmon;
+    }
+
+    .customInput__icon {
+      color: v.$color-salmon;
+    }
+  }
+
+  &__wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  &__field {
+    outline: none;
+    border: 1px solid v.$color-black-40;
+    font-family: inherit;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 24px;
+    background-color: transparent;
+    border-radius: 8px;
+    padding: 16px 16px 16px 52px;
+    color: v.$color-black;
+    transition: border-color v.$transition-300;
+
+    &::placeholder {
+      color: v.$color-black-40;
+    }
+  }
+
+  &__icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: v.$color-black-40;
+    transition: color v.$transition-300;
+  }
+
+  &__errorMessage {
+    color: v.$color-salmon;
+    font-size: 16px;
+    margin-top: 4px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    .customInput__field {
+      border-color: v.$color-lilac;
+    }
+    .customInput__icon {
+      color: v.$color-lilac;
+    }
+  }
+}

@@ -1,0 +1,40 @@
+// Colors
+$color-white: #ffffff;
+$color-iridium: #393b3c;
+$color-mulled-wine: #45526e;
+$color-boulder: #777777;
+$color-smokey-grey: #747474;
+$color-cornflower-blue: #67a5eb;
+$color-iris: #6a5dc2;
+$color-lilac: #b4a9ff;
+$color-heliotrope-purple: #dc5dfc;
+$color-fire-engine-red: #c82020;
+$color-salmon: #ff7575;
+$color-medium-spring-green: #308e21;
+$color-brown-yellow: #a59400;
+$color-night: #0a0b0b;
+$color-black: #000000;
+
+$color-black-40: rgba(0, 0, 0, 0.4);
+$color-black-50: rgba(0, 0, 0, 0.5);
+$color-black-80: rgba(0, 0, 0, 0.8);
+
+$color-white-5: rgba(255, 255, 255, 0.05);
+$color-white-15: rgba(255, 255, 255, 0.15);
+$color-white-25: rgba(255, 255, 255, 0.25);
+$color-white-30: rgba(255, 255, 255, 0.3);
+$color-white-33: rgba(255, 255, 255, 0.33);
+$color-white-40: rgba(255, 255, 255, 0.4);
+$color-white-50: rgba(255, 255, 255, 0.5);
+$color-white-70: rgba(255, 255, 255, 0.7);
+$color-white-80: rgba(255, 255, 255, 0.8);
+
+// Typography
+$ff-main: "Play", "Arial", sans-serif;
+
+// Viewport
+$vp-tablet: 1023px;
+$vp-mobile: 767px;
+
+// Animation
+$transition-300: ease-in 0.3s;
