@@ -1,0 +1,57 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: ${APPLICATION_NAME:drone-analytics-service}
+    version: ${APPLICATION_VERSION:1.0.0}
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO}
+    show-sql: ${SPRING_JPA_SHOW_SQL}
+    properties:
+      hibernate:
+        format_sql: ${SPRING_JPA_FORMAT_SQL}
+        dialect: org.hibernate.spatial.dialect.postgis.PostgisPG95Dialect
+
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:10MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:10MB}
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: ${SERVER_CONTEXT_PATH:/api}
+  compression:
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+
+logging:
+  level:
+    com.droneapp: ${LOGGING_LEVEL_COM_DRONEAPP:DEBUG}
+    org.hibernate: ${LOGGING_LEVEL_ORG_HIBERNATE:DEBUG}
+  file:
+    name: ${LOGGING_FILE_NAME:logs/application.log}
+
+app:
+  upload:
+    temp-dir: ${APP_UPLOAD_TEMP_DIR:./uploads/temp}
+    allowed-extensions: ${APP_UPLOAD_ALLOWED_EXTENSIONS:.xlsx,.xls,.csv}
+  report:
+    image:
+      width: ${APP_REPORT_IMAGE_WIDTH:1200}
+      height: ${APP_REPORT_IMAGE_HEIGHT:800}
+    retention:
+      days: ${APP_REPORT_RETENTION_DAYS:30}

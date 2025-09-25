@@ -5,5 +5,6 @@ import jakarta.validation.constraints.NotNull;
 
 public record UserCreateRequest(
     @NotBlank(message = "Роль пользователя обязательна")
-    String role
+    String role,
+    String email
 ) {}

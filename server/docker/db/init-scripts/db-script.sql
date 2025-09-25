@@ -26,8 +26,9 @@ CREATE INDEX idx_regions_geometry ON regions USING GIST (geometry);
 -- Таблица пользователей (операторы, аналитики, администраторы)
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGSERIAL PRIMARY KEY,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('OPERATOR', 'ANALYST', 'ADMIN'))
-                             );
+    role VARCHAR(50) NOT NULL CHECK (role IN ('OPERATOR', 'ANALYST', 'ADMIN')),
+    email VARCHAR(255)
+    );
 
 -- Индекс для быстрого поиска по имени пользователя
 CREATE INDEX idx_users_role ON users(role);
