@@ -2,20 +2,16 @@ package com.drones.skilldrones.service;
 
 import com.drones.skilldrones.dto.ParsedFlightData;
 import com.drones.skilldrones.dto.ProcessingStats;
+import com.drones.skilldrones.mapper.FlightProcessingMapper;
 import com.drones.skilldrones.model.Flight;
 import com.drones.skilldrones.model.RawTelegram;
 import com.drones.skilldrones.model.Region;
 import com.drones.skilldrones.repository.FlightRepository;
 import com.drones.skilldrones.repository.RegionRepository;
-import com.drones.skilldrones.service.FileParserService;
-import com.drones.skilldrones.service.FlightProcessingService;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -26,16 +22,16 @@ public class FlightProcessingServiceImpl implements FlightProcessingService {
     private final FileParserService fileParserService;
     private final RegionRepository regionRepository;
     private final FlightRepository flightRepository;
-    private final GeometryFactory geometryFactory;
+    private final FlightProcessingMapper flightProcessingMapper;
 
-    // Используем FileParserService вместо TelegramParserService
     public FlightProcessingServiceImpl(FileParserService fileParserService,
                                        RegionRepository regionRepository,
-                                       FlightRepository flightRepository) {
+                                       FlightRepository flightRepository,
+                                       FlightProcessingMapper flightProcessingMapper) {
         this.fileParserService = fileParserService;
         this.regionRepository = regionRepository;
         this.flightRepository = flightRepository;
-        this.geometryFactory = new GeometryFactory();
+        this.flightProcessingMapper = flightProcessingMapper;
     }
 
     @Override
@@ -65,7 +61,6 @@ public class FlightProcessingServiceImpl implements FlightProcessingService {
                 successful++;
             } catch (Exception e) {
                 telegram.setProcessingStatus("FAILED");
-                // Логируем ошибку, но продолжаем обработку
                 System.err.println("Ошибка обработки телеграммы " + telegram.getId() + ": " + e.getMessage());
             }
         }
@@ -75,65 +70,113 @@ public class FlightProcessingServiceImpl implements FlightProcessingService {
 
     @Override
     public Flight convertToFlight(RawTelegram telegram) {
-        Flight flight = new Flight();
-
-        // Используем FileParserService для извлечения данных
+        // Парсим данные из телеграммы
         ParsedFlightData parsedData = fileParserService.extractFlightDataFromTelegram(telegram);
 
-        // Заполняем основные поля
-        flight.setFlightCode(parsedData.getFlightId());
-        flight.setDroneType(parsedData.getDroneType());
-        flight.setRawTelegram(telegram);
-        flight.setFlightDate(parsedData.getFlightDate());
+        // Используем маппер для основного преобразования
+        Flight flight = flightProcessingMapper.toFlight(parsedData);
 
-        // Устанавливаем время (можно добавить парсинг времени)
-        flight.setDepartureTime(LocalTime.now()); // временно, нужно парсить из телеграммы
-        flight.setArrivalTime(LocalTime.now().plusMinutes(30)); // временно
-
-        // Геопривязка
-        String coords = parsedData.getCoordinates();
-        if (coords != null) {
-            Point point = createPointFromCoords(coords);
-            flight.setDeparturePoint(point);
-            flight.setDepartureCoords(coords);
-
-            // Находим регион по координатам
-            Optional<Region> region = regionRepository.findRegionByPoint(point);
-            region.ifPresent(flight::setDepartureRegion);
-
-            // Для простоты считаем, что вылет и прилет в одном месте
-            flight.setArrivalPoint(point);
-            flight.setArrivalCoords(coords);
-            region.ifPresent(flight::setArrivalRegion);
-        }
-
-        // Рассчитываем продолжительность (временная логика)
-        if (flight.getDepartureTime() != null && flight.getArrivalTime() != null) {
-            long durationMinutes = java.time.Duration.between(
-                    flight.getDepartureTime(), flight.getArrivalTime()
-            ).toMinutes();
-            flight.setDurationMinutes((int) durationMinutes);
-        }
+        // Дополнительная бизнес-логика, которая не входит в маппер
+        setFlightTimes(flight, parsedData, telegram);
+        performGeolocation(flight);
+        calculateDuration(flight);
 
         return flight;
     }
 
-    @Override
-    public ProcessingStats getProcessingStats() {
-        // Здесь можно добавить логику для сбора статистики
-        // Например, посчитать количество обработанных/необработанных телеграмм
-        return new ProcessingStats(0, 0, 0); // заглушка
+    /**
+     * Устанавливает время вылета и прилета
+     */
+    private void setFlightTimes(Flight flight, ParsedFlightData parsedData, RawTelegram telegram) {
+        // Парсим время из телеграммы (если есть соответствующая логика в FileParserService)
+        LocalTime departureTime = parseDepartureTime(telegram);
+        LocalTime arrivalTime = parseArrivalTime(telegram);
+
+        if (departureTime != null) {
+            flight.setDepartureTime(departureTime);
+        } else {
+            flight.setDepartureTime(LocalTime.now()); // временное значение
+        }
+
+        if (arrivalTime != null) {
+            flight.setArrivalTime(arrivalTime);
+        } else if (departureTime != null) {
+            flight.setArrivalTime(departureTime.plusMinutes(30)); // временная логика
+        } else {
+            flight.setArrivalTime(LocalTime.now().plusMinutes(30));
+        }
     }
 
-    private Point createPointFromCoords(String coords) {
-        try {
-            String[] parts = coords.split(",");
-            double lat = Double.parseDouble(parts[0].trim());
-            double lon = Double.parseDouble(parts[1].trim());
+    /**
+     * Выполняет геопривязку к регионам
+     */
+    private void performGeolocation(Flight flight) {
+        if (flight.getDeparturePoint() != null) {
+            Optional<Region> departureRegion = regionRepository.findRegionByPoint(flight.getDeparturePoint());
+            departureRegion.ifPresent(flight::setDepartureRegion);
 
-            return geometryFactory.createPoint(new Coordinate(lon, lat));
-        } catch (Exception e) {
-            throw new RuntimeException("Ошибка создания точки из координат: " + coords, e);
+            // Для простоты считаем, что вылет и прилет в одном месте
+            flight.setArrivalPoint(flight.getDeparturePoint());
+            departureRegion.ifPresent(flight::setArrivalRegion);
         }
+    }
+
+    /**
+     * Рассчитывает продолжительность полета
+     */
+    private void calculateDuration(Flight flight) {
+        if (flight.getDepartureTime() != null && flight.getArrivalTime() != null) {
+            long durationMinutes = java.time.Duration.between(
+                    flight.getDepartureTime(), flight.getArrivalTime()
+            ).toMinutes();
+            flight.setDurationMinutes((int) Math.max(0, durationMinutes));
+        }
+    }
+
+    /**
+     * Парсит время вылета из телеграммы
+     */
+    private LocalTime parseDepartureTime(RawTelegram telegram) {
+        // Реализация парсинга времени из DEP-телеграммы
+        // Пример: поиск паттерна времени в dep_raw_text
+        if (telegram.getDepRawText() != null) {
+            // Паттерн для времени: ATD 0705
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("ATD (\\d{4})");
+            java.util.regex.Matcher matcher = pattern.matcher(telegram.getDepRawText());
+            if (matcher.find()) {
+                return flightProcessingMapper.extractTime(matcher.group(1));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Парсит время прилета из телеграммы
+     */
+    private LocalTime parseArrivalTime(RawTelegram telegram) {
+        // Реализация парсинга времени из ARR-телеграммы
+        if (telegram.getArrRawText() != null) {
+            // Паттерн для времени: ATA 1250
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("ATA (\\d{4})");
+            java.util.regex.Matcher matcher = pattern.matcher(telegram.getArrRawText());
+            if (matcher.find()) {
+                return flightProcessingMapper.extractTime(matcher.group(1));
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public ProcessingStats getProcessingStats() {
+        // Реализация сбора статистики из базы данных
+        long totalProcessed = flightRepository.count();
+        long successful = flightRepository.countByProcessingStatus("PROCESSED");
+        long failed = flightRepository.countByProcessingStatus("FAILED");
+
+        return new ProcessingStats(
+                (int) totalProcessed,
+                (int) successful,
+                (int) failed
+        );
     }
 }

@@ -20,4 +20,15 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
 
     @Query("SELECT f.droneType, COUNT(f) FROM Flight f GROUP BY f.droneType")
     List<Object[]> countFlightsByDroneType();
+
+    // Метод для подсчета по статусу обработки
+    long countByProcessingStatus(String status);
+
+    // Дополнительные методы для статистики
+    @Query("SELECT COUNT(f) FROM Flight f WHERE f.flightDate BETWEEN :startDate AND :endDate")
+    long countByFlightDateBetween(@Param("startDate") java.time.LocalDate startDate,
+                                  @Param("endDate") java.time.LocalDate endDate);
+
+    @Query("SELECT COUNT(f) FROM Flight f WHERE f.departureRegion.regionId = :regionId")
+    long countByDepartureRegion(@Param("regionId") Long regionId);
 }

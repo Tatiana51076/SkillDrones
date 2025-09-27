@@ -1,5 +1,8 @@
 package com.drones.skilldrones.service;
+
 import com.drones.skilldrones.dto.ParsedFlightData;
+import com.drones.skilldrones.dto.response.RegionResponse;
+import com.drones.skilldrones.mapper.RegionMapper;
 import com.drones.skilldrones.model.Region;
 import com.drones.skilldrones.repository.RegionRepository;
 import org.locationtech.jts.geom.Coordinate;
@@ -15,16 +18,16 @@ import java.util.stream.Collectors;
 public class RegionAnalysisServiceImpl implements RegionAnalysisService {
 
     private final RegionRepository regionRepository;
+    private final RegionMapper regionMapper;
     private final GeometryFactory geometryFactory;
 
-    public RegionAnalysisServiceImpl(RegionRepository regionRepository) {
+    public RegionAnalysisServiceImpl(RegionRepository regionRepository,
+                                     RegionMapper regionMapper) {
         this.regionRepository = regionRepository;
+        this.regionMapper = regionMapper;
         this.geometryFactory = new GeometryFactory();
     }
 
-    /**
-     * Определяет регион для полета по координатам
-     */
     @Override
     public Optional<Region> findRegionForCoordinates(String coordinates) {
         if (coordinates == null || coordinates.isEmpty()) {
@@ -62,23 +65,27 @@ public class RegionAnalysisServiceImpl implements RegionAnalysisService {
                 .stream()
                 .sorted(Map.Entry.<Region, Integer>comparingByValue().reversed())
                 .limit(10)
-                .toList();
+                .collect(Collectors.toList());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalFlightsProcessed", totalProcessed);
         result.put("failedGeolocation", failedGeolocation);
         result.put("analysisDate", new Date());
 
+        // Используем RegionMapper для преобразования регионов в DTO
         List<Map<String, Object>> topRegions = new ArrayList<>();
         int rank = 1;
 
         for (Map.Entry<Region, Integer> entry : sortedRegions) {
             Map<String, Object> regionInfo = new LinkedHashMap<>();
             regionInfo.put("rank", rank++);
-            regionInfo.put("regionName", entry.getKey().getName());
             regionInfo.put("flightCount", entry.getValue());
-            regionInfo.put("regionId", entry.getKey().getRegionId());
 
+            // Маппим регион в DTO используя RegionMapper
+            RegionResponse regionResponse = regionMapper.toResponse(entry.getKey());
+            regionInfo.put("region", regionResponse);
+
+            // Добавляем плотность полетов
             if (entry.getKey().getAreaKm2() != null) {
                 double density = (double) entry.getValue() / entry.getKey().getAreaKm2() * 1000;
                 regionInfo.put("flightDensity", Math.round(density * 100) / 100.0);
@@ -91,9 +98,6 @@ public class RegionAnalysisServiceImpl implements RegionAnalysisService {
         return result;
     }
 
-    /**
-     * Анализирует топ регионов за определенный период
-     */
     @Override
     public Map<String, Object> analyzeTopRegionsByPeriod(List<ParsedFlightData> flightData,
                                                          LocalDate startDate,
@@ -121,14 +125,28 @@ public class RegionAnalysisServiceImpl implements RegionAnalysisService {
                 (List<Map<String, Object>>) analysisResult.get("topRegions");
 
         return topRegions.stream()
-                .map(region -> String.format("%d. %s (%d полетов)",
-                        region.get("rank"), region.get("regionName"), region.get("flightCount")))
+                .map(region -> {
+                    @SuppressWarnings("unchecked")
+                    RegionResponse regionResponse = (RegionResponse) region.get("region");
+                    int flightCount = (Integer) region.get("flightCount");
+                    return String.format("%d. %s (%d полетов)",
+                            region.get("rank"), regionResponse.name(), flightCount);
+                })
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Создает Point из строки координат "lat,lon"
-     */
+    @Override
+    public List<RegionResponse> getAllRegions() {
+        List<Region> regions = regionRepository.findAll();
+        return regionMapper.toResponseList(regions);
+    }
+
+    @Override
+    public Optional<RegionResponse> getRegionById(Long regionId) {
+        return regionRepository.findById(regionId)
+                .map(regionMapper::toResponse);
+    }
+
     private Point createPointFromCoordinates(String coordinates) {
         String[] parts = coordinates.split(",");
         double lat = Double.parseDouble(parts[0].trim());

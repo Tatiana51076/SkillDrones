@@ -1,24 +1,24 @@
 package com.drones.skilldrones.service;
 
+import com.drones.skilldrones.dto.response.ReportResponse;
+import com.drones.skilldrones.mapper.ReportMapper;
 import com.drones.skilldrones.model.Flight;
 import com.drones.skilldrones.model.Region;
+import com.drones.skilldrones.model.ReportLog;
 import com.drones.skilldrones.repository.FlightRepository;
-import com.drones.skilldrones.repository.RegionRepository;
+import com.drones.skilldrones.repository.ReportLogRepository;
 import com.drones.skilldrones.service.ReportService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.data.category.DefaultCategoryDataset;
-import org.jfree.data.time.Day;
-import org.jfree.data.time.TimeSeries;
-import org.jfree.data.time.TimeSeriesCollection;
+import org.jfree.data.general.DefaultPieDataset;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.StringWriter;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
@@ -27,18 +27,24 @@ import javax.imageio.ImageIO;
 @Service
 public class ReportServiceImpl implements ReportService {
     private final FlightRepository flightRepository;
-    private final RegionRepository regionRepository;
+    private final ReportLogRepository reportLogRepository;
+    private final ReportMapper reportMapper;
     private final ObjectMapper objectMapper;
 
     public ReportServiceImpl(FlightRepository flightRepository,
-                             RegionRepository regionRepository) {
+                             ReportLogRepository reportLogRepository,
+                             ReportMapper reportMapper) {
         this.flightRepository = flightRepository;
-        this.regionRepository = regionRepository;
+        this.reportLogRepository = reportLogRepository;
+        this.reportMapper = reportMapper;
         this.objectMapper = new ObjectMapper();
     }
 
     @Override
     public File generateFlightsChart(LocalDate startDate, LocalDate endDate, String chartType) {
+        ReportLog reportLog = createReportLog("CHART", startDate, endDate,
+                Map.of("chartType", chartType));
+
         try {
             List<Flight> flights = flightRepository.findByFlightDateBetween(startDate, endDate);
 
@@ -49,18 +55,28 @@ public class ReportServiceImpl implements ReportService {
             BufferedImage image = chart.createBufferedImage(800, 600);
             ImageIO.write(image, "png", chartFile);
 
+            // Обновляем отчет
+            reportLog.setFilePath(chartFile.getAbsolutePath());
+            reportLog.setStatus(ReportLog.ReportStatus.COMPLETED);
+            reportLogRepository.save(reportLog);
+
             return chartFile;
         } catch (Exception e) {
+            // Сохраняем ошибку
+            reportLog.setStatus(ReportLog.ReportStatus.FAILED);
+            reportLog.setErrorMessage("Ошибка генерации графика: " + e.getMessage());
+            reportLogRepository.save(reportLog);
             throw new RuntimeException("Ошибка генерации графика", e);
         }
     }
 
     @Override
     public String generateRegionalReport(LocalDate startDate, LocalDate endDate) {
+        ReportLog reportLog = createReportLog("REGIONAL", startDate, endDate, null);
+
         try {
             List<Flight> flights = flightRepository.findByFlightDateBetween(startDate, endDate);
 
-            // Группируем полеты по регионам вылета
             Map<String, Long> regionalStats = flights.stream()
                     .filter(flight -> flight.getDepartureRegion() != null)
                     .collect(Collectors.groupingBy(
@@ -68,14 +84,12 @@ public class ReportServiceImpl implements ReportService {
                             Collectors.counting()
                     ));
 
-            // Сортируем по убыванию количества полетов
             Map<String, Object> reportData = new LinkedHashMap<>();
             reportData.put("periodStart", startDate.toString());
             reportData.put("periodEnd", endDate.toString());
             reportData.put("totalFlights", flights.size());
             reportData.put("regionalDistribution", regionalStats);
 
-            // Топ-10 регионов
             List<Map<String, Object>> topRegions = regionalStats.entrySet().stream()
                     .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                     .limit(10)
@@ -89,22 +103,31 @@ public class ReportServiceImpl implements ReportService {
 
             reportData.put("top10Regions", topRegions);
 
-            // Конвертируем в JSON
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(reportData);
+            String jsonReport = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(reportData);
+
+            // Сохраняем параметры отчета
+            reportLog.setParameters(jsonReport);
+            reportLog.setStatus(ReportLog.ReportStatus.COMPLETED);
+            reportLogRepository.save(reportLog);
+
+            return jsonReport;
 
         } catch (Exception e) {
+            reportLog.setStatus(ReportLog.ReportStatus.FAILED);
+            reportLog.setErrorMessage("Ошибка генерации регионального отчета: " + e.getMessage());
+            reportLogRepository.save(reportLog);
             throw new RuntimeException("Ошибка генерации регионального отчета", e);
         }
     }
 
     @Override
     public Map<String, Object> generateComprehensiveReport(LocalDate startDate, LocalDate endDate) {
+        ReportLog reportLog = createReportLog("COMPREHENSIVE", startDate, endDate, null);
         Map<String, Object> comprehensiveReport = new LinkedHashMap<>();
 
         try {
             List<Flight> flights = flightRepository.findByFlightDateBetween(startDate, endDate);
 
-            // Основная статистика
             comprehensiveReport.put("reportType", "COMPREHENSIVE");
             comprehensiveReport.put("periodStart", startDate.toString());
             comprehensiveReport.put("periodEnd", endDate.toString());
@@ -136,31 +159,68 @@ public class ReportServiceImpl implements ReportService {
                     ));
             comprehensiveReport.put("dailyFlights", dailyStats);
 
-            // Расчет дополнительных метрик
-            comprehensiveReport.put("averageFlightsPerDay",
-                    calculateAverageFlightsPerDay(flights, startDate, endDate));
-            comprehensiveReport.put("peakDay", findPeakDay(flights));
-            comprehensiveReport.put("mostActiveRegion", findMostActiveRegion(flights));
-
             // Генерация графика
             File chartFile = generateFlightsChart(startDate, endDate, "bar");
             comprehensiveReport.put("chartFilePath", chartFile.getAbsolutePath());
 
+            // Сохраняем параметры отчета
+            reportLog.setParameters(objectMapper.writeValueAsString(comprehensiveReport));
+            reportLog.setStatus(ReportLog.ReportStatus.COMPLETED);
+            reportLogRepository.save(reportLog);
+
         } catch (Exception e) {
             comprehensiveReport.put("error", "Ошибка генерации отчета: " + e.getMessage());
+            reportLog.setStatus(ReportLog.ReportStatus.FAILED);
+            reportLog.setErrorMessage(e.getMessage());
+            reportLogRepository.save(reportLog);
         }
 
         return comprehensiveReport;
     }
 
     @Override
+    public List<ReportResponse> getReportHistory() {
+        List<ReportLog> reports = reportLogRepository.findAllByOrderByCreatedAtDesc();
+        return reportMapper.toResponseList(reports);
+    }
+
+    @Override
+    public Optional<ReportResponse> getReportById(Long reportId) {
+        return reportLogRepository.findById(reportId)
+                .map(reportMapper::toResponse);
+    }
+
+    @Override
+    public List<ReportResponse> getReportsByType(String reportType) {
+        List<ReportLog> reports = reportLogRepository.findByReportTypeOrderByCreatedAtDesc(reportType);
+        return reportMapper.toResponseList(reports);
+    }
+
+    @Override
+    public List<ReportResponse> getCompletedReports() {
+        List<ReportLog> reports = reportLogRepository.findCompletedReports();
+        return reportMapper.toResponseList(reports);
+    }
+
+    @Override
+    public ReportStatistics getReportStatistics() {
+        long total = reportLogRepository.count();
+        long completed = reportLogRepository.countByStatus(ReportLog.ReportStatus.COMPLETED);
+        long failed = reportLogRepository.countByStatus(ReportLog.ReportStatus.FAILED);
+        long pending = reportLogRepository.countByStatus(ReportLog.ReportStatus.PENDING);
+
+        return new ReportStatistics(total, completed, failed, pending);
+    }
+
+    @Override
     public Map<String, Object> generateTopRegionsReport(LocalDate startDate, LocalDate endDate) {
+        ReportLog reportLog = createReportLog("TOP_REGIONS", startDate, endDate, null);
         Map<String, Object> report = new LinkedHashMap<>();
 
         try {
             List<Flight> flights = flightRepository.findByFlightDateBetween(startDate, endDate);
 
-            // Группируем по регионам и считаем плотность полетов
+            // Группируем полеты по регионам и считаем плотность полетов
             List<Map<String, Object>> topRegions = flights.stream()
                     .filter(flight -> flight.getDepartureRegion() != null)
                     .collect(Collectors.groupingBy(
@@ -187,122 +247,79 @@ public class ReportServiceImpl implements ReportService {
                     })
                     .collect(Collectors.toList());
 
+            report.put("reportType", "TOP_REGIONS");
+            report.put("periodStart", startDate.toString());
+            report.put("periodEnd", endDate.toString());
+            report.put("totalFlightsAnalyzed", flights.size());
             report.put("topRegions", topRegions);
             report.put("totalRegionsWithFlights",
                     flights.stream().filter(f -> f.getDepartureRegion() != null)
                             .map(f -> f.getDepartureRegion().getRegionId())
                             .distinct().count());
-            report.put("period", startDate + " - " + endDate);
+
+            // Сохраняем отчет
+            reportLog.setParameters(objectMapper.writeValueAsString(report));
+            reportLog.setStatus(ReportLog.ReportStatus.COMPLETED);
+            reportLogRepository.save(reportLog);
 
         } catch (Exception e) {
-            report.put("error", "Ошибка генерации отчета по регионам: " + e.getMessage());
-        }
-
-        return report;
-    }
-
-    @Override
-    public Map<String, Object> generateTimeSeriesReport(LocalDate startDate, LocalDate endDate) {
-        Map<String, Object> report = new LinkedHashMap<>();
-
-        try {
-            List<Flight> flights = flightRepository.findByFlightDateBetween(startDate, endDate);
-
-            // Группируем по дням
-            Map<LocalDate, Long> dailyCounts = flights.stream()
-                    .collect(Collectors.groupingBy(
-                            Flight::getFlightDate,
-                            Collectors.counting()
-                    ));
-
-            // Заполняем пропущенные дни нулями
-            List<Map<String, Object>> timeSeries = new ArrayList<>();
-            LocalDate currentDate = startDate;
-            while (!currentDate.isAfter(endDate)) {
-                long count = dailyCounts.getOrDefault(currentDate, 0L);
-
-                Map<String, Object> dayData = new HashMap<>();
-                dayData.put("date", currentDate.toString());
-                dayData.put("flightCount", count);
-                dayData.put("isPeak", count >= Collections.max(dailyCounts.values()));
-
-                timeSeries.add(dayData);
-                currentDate = currentDate.plusDays(1);
-            }
-
-            report.put("timeSeries", timeSeries);
-            report.put("totalDays", timeSeries.size());
-            report.put("daysWithFlights", dailyCounts.size());
-            report.put("daysWithoutFlights", timeSeries.size() - dailyCounts.size());
-            report.put("averageFlightsPerDay",
-                    flights.size() / (double) timeSeries.size());
-
-            // Статистика по дням недели
-            Map<String, Long> weeklyPattern = flights.stream()
-                    .collect(Collectors.groupingBy(
-                            flight -> flight.getFlightDate().getDayOfWeek().toString(),
-                            Collectors.counting()
-                    ));
-            report.put("weeklyPattern", weeklyPattern);
-
-        } catch (Exception e) {
-            report.put("error", "Ошибка генерации временного ряда: " + e.getMessage());
+            report.put("error", "Ошибка генерации отчета по топ регионам: " + e.getMessage());
+            reportLog.setStatus(ReportLog.ReportStatus.FAILED);
+            reportLog.setErrorMessage(e.getMessage());
+            reportLogRepository.save(reportLog);
         }
 
         return report;
     }
 
     // Вспомогательные методы
+    private ReportLog createReportLog(String reportType, LocalDate startDate, LocalDate endDate,
+                                      Map<String, Object> parameters) {
+        ReportLog reportLog = new ReportLog();
+        reportLog.setReportType(reportType);
+        reportLog.setReportPeriodStart(startDate);
+        reportLog.setReportPeriodEnd(endDate);
+        reportLog.setStatus(ReportLog.ReportStatus.PROCESSING);
+
+        try {
+            if (parameters != null) {
+                reportLog.setParameters(objectMapper.writeValueAsString(parameters));
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки сериализации параметров
+        }
+
+        return reportLogRepository.save(reportLog);
+    }
+
+    // Методы для создания графиков (без изменений)
     private DefaultCategoryDataset createDataset(List<Flight> flights) {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-
         flights.stream()
                 .collect(Collectors.groupingBy(
                         Flight::getFlightDate,
                         Collectors.counting()
                 ))
-                .forEach((date, count) ->
-                        dataset.addValue(count, "Полеты", date.toString())
-                );
-
+                .forEach((date, count) -> dataset.addValue(count, "Полеты", date.toString()));
         return dataset;
     }
 
     private JFreeChart createChart(DefaultCategoryDataset dataset, String chartType, List<Flight> flights) {
         return switch (chartType.toLowerCase()) {
             case "line" -> ChartFactory.createLineChart(
-                    "Статистика полетов по дням",
-                    "Дата",
-                    "Количество полетов",
-                    dataset,
-                    org.jfree.chart.plot.PlotOrientation.VERTICAL,
-                    true,    // show legend
-                    true,    // use tooltips
-                    false    // configure URLs
-            );
+                    "Статистика полетов по дням", "Дата", "Количество полетов",
+                    dataset, org.jfree.chart.plot.PlotOrientation.VERTICAL, true, true, false);
             case "pie" -> ChartFactory.createPieChart(
-                    "Распределение полетов по регионам",
-                    createPieDataset(flights),
-                    true,    // show legend
-                    true,    // use tooltips
-                    false    // configure URLs
-            );
+                    "Распределение полетов по регионам", createPieDataset(flights),
+                    true, true, false);
             default -> ChartFactory.createBarChart(
-                    "Статистика полетов по дням",
-                    "Дата",
-                    "Количество полетов",
-                    dataset,
-                    org.jfree.chart.plot.PlotOrientation.VERTICAL,
-                    true,    // show legend
-                    true,    // use tooltips
-                    false    // configure URLs
-            );
+                    "Статистика полетов по дням", "Дата", "Количество полетов",
+                    dataset, org.jfree.chart.plot.PlotOrientation.VERTICAL, true, true, false);
         };
     }
 
-    private org.jfree.data.general.DefaultPieDataset createPieDataset(List<Flight> flights) {
-        org.jfree.data.general.DefaultPieDataset dataset = new org.jfree.data.general.DefaultPieDataset();
-
+    private DefaultPieDataset createPieDataset(List<Flight> flights) {
+        DefaultPieDataset dataset = new DefaultPieDataset();
         flights.stream()
                 .filter(flight -> flight.getDepartureRegion() != null)
                 .collect(Collectors.groupingBy(
@@ -310,68 +327,30 @@ public class ReportServiceImpl implements ReportService {
                         Collectors.counting()
                 ))
                 .forEach(dataset::setValue);
-
         return dataset;
     }
 
-    private double calculateAverageFlightsPerDay(List<Flight> flights, LocalDate start, LocalDate end) {
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
-        return flights.size() / (double) daysBetween;
-    }
+    // DTO для статистики отчетов
+    public static class ReportStatistics {
+        private final long totalReports;
+        private final long completedReports;
+        private final long failedReports;
+        private final long pendingReports;
+        private final double successRate;
 
-    private Map<String, Object> findPeakDay(List<Flight> flights) {
-        return flights.stream()
-                .collect(Collectors.groupingBy(
-                        Flight::getFlightDate,
-                        Collectors.counting()
-                ))
-                .entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(entry -> {
-                    Map<String, Object> peakDay = new HashMap<>();
-                    peakDay.put("date", entry.getKey().toString());
-                    peakDay.put("flightCount", entry.getValue());
-                    return peakDay;
-                })
-                .orElse(Map.of("date", "N/A", "flightCount", 0));
-    }
+        public ReportStatistics(long total, long completed, long failed, long pending) {
+            this.totalReports = total;
+            this.completedReports = completed;
+            this.failedReports = failed;
+            this.pendingReports = pending;
+            this.successRate = total > 0 ? (double) completed / total * 100 : 0;
+        }
 
-    private Map<String, Object> findMostActiveRegion(List<Flight> flights) {
-        return flights.stream()
-                .filter(flight -> flight.getDepartureRegion() != null)
-                .collect(Collectors.groupingBy(
-                        Flight::getDepartureRegion,
-                        Collectors.counting()
-                ))
-                .entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(entry -> {
-                    Map<String, Object> regionInfo = new HashMap<>();
-                    regionInfo.put("regionName", entry.getKey().getName());
-                    regionInfo.put("flightCount", entry.getValue());
-                    return regionInfo;
-                })
-                .orElse(Map.of("regionName", "N/A", "flightCount", 0));
-    }
-
-    // Метод для создания временного ряда (для линейных графиков)
-    private TimeSeriesCollection createTimeSeriesDataset(List<Flight> flights) {
-        TimeSeries series = new TimeSeries("Полеты");
-
-        flights.stream()
-                .collect(Collectors.groupingBy(
-                        Flight::getFlightDate,
-                        Collectors.counting()
-                ))
-                .forEach((date, count) -> {
-                    series.add(new Day(
-                                    Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant())),
-                            count
-                    );
-                });
-
-        TimeSeriesCollection dataset = new TimeSeriesCollection();
-        dataset.addSeries(series);
-        return dataset;
+        // Геттеры
+        public long getTotalReports() { return totalReports; }
+        public long getCompletedReports() { return completedReports; }
+        public long getFailedReports() { return failedReports; }
+        public long getPendingReports() { return pendingReports; }
+        public double getSuccessRate() { return successRate; }
     }
 }

@@ -30,6 +30,9 @@ public class Flight {
 
     private String departureCoords;
     private String arrivalCoords;
+    private String processingStatus;
+
+
 
     @Column(columnDefinition = "geometry(Point,4326)")
     private Point departurePoint;
@@ -196,5 +199,13 @@ public class Flight {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getProcessingStatus() {
+        return processingStatus;
+    }
+
+    public void setProcessingStatus(String processingStatus) {
+        this.processingStatus = processingStatus;
     }
 }

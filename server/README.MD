@@ -1,38 +1,41 @@
 🚁 SkillDrones - Система анализа полетов БПЛА
-
 📋 О проекте
 
 Система для анализа полетов беспилотных летательных аппаратов (БПЛА) в регионах России. Сервис автоматически обрабатывает данные из формализованных сообщений, производит геопривязку к субъектам РФ и предоставляет аналитику через REST API.
 
 Технологический стек:
 
-    Backend: Java 17, Spring Boot 3.x
+    Backend: Java 21, Spring Boot 3.x
 
     База данных: PostgreSQL с PostGIS
 
-    Геоданные: JTS, GeoTools
+    Геоданные: JTS, GeoTools, Hibernate Spatial
 
     Графики: JFreeChart
 
     Документация: Swagger/OpenAPI 3
 
+    Маппинг: MapStruct
+
+    Безопасность: Spring Security
+
 🎯 Архитектура API
 🎮 Контроллеры системы
 
-    RegionAnalysisController - Анализ и геопривязка данных
+    RegionAnalysisController - Анализ и геопривязка данных (/api/analysis)
 
-    FlightProcessingController - Обработка и сохранение полетов
+    FlightProcessingController - Обработка и сохранение полетов (/api/processing)
 
-    ReportController - Генерация отчетов и графиков
+    ReportController - Генерация отчетов и графиков (/api/reports)
 
 🚀 Быстрый старт
 Предварительные требования
 
     Java 21 или выше
 
-    PostgreSQL 12+
+    PostgreSQL 15+
 
-    Maven 3.6+
+    Maven 3.9+
 
     Docker (опционально)
 
@@ -69,7 +72,16 @@ ddl-auto: update
 show-sql: true
 
 server:
-port: 8080
+port: 8081
+servlet:
+context-path: /api
+
+springdoc:
+api-docs:
+path: /v3/api-docs
+swagger-ui:
+path: /swagger-ui.html
+enabled: true
 
 logging:
 level:
@@ -82,12 +94,12 @@ bash
 mvn clean install
 mvn spring-boot:run
 
-Приложение будет доступно по адресу: http://localhost:8081
+Приложение будет доступно по адресу: http://localhost:8081/api
 📊 API Endpoints
 🔍 1. RegionAnalysisController - Анализ данных
 
 Базовый URL: /api/analysis
-Загрузка и анализ Excel файла
+Анализ топ регионов из файла
 http
 
 POST /api/analysis/top-regions
@@ -95,13 +107,13 @@ Content-Type: multipart/form-data
 
 file: <excel-file>
 
-Пример запроса (curl):
+Пример запроса:
 bash
 
 curl -X POST -F "file=@flights_data.xlsx" \
-http://localhost:8081/api/analysis/top-regions
+http://localhost:8081/api/api/analysis/top-regions
 
-Анализ за период:
+Анализ за период
 http
 
 POST /api/analysis/top-regions/period?startDate=2024-01-01&endDate=2024-01-31
@@ -109,7 +121,7 @@ Content-Type: multipart/form-data
 
 file: <excel-file>
 
-Простой топ регионов:
+Упрощенный анализ
 http
 
 POST /api/analysis/top-regions/simple
@@ -117,13 +129,11 @@ Content-Type: multipart/form-data
 
 file: <excel-file>
 
-Ответ:
-json
+Получение справочника регионов
+http
 
-[
-"1. Московская область (42 полетов)",
-"2. Санкт-Петербург (38 полетов)"
-]
+GET /api/analysis/regions
+GET /api/analysis/regions/{regionId}
 
 ⚙️ 2. FlightProcessingController - Обработка данных
 
@@ -136,11 +146,11 @@ Content-Type: multipart/form-data
 
 file: <excel-file>
 
-Пример запроса:
+Пример:
 bash
 
 curl -X POST -F "file=@flights_data.xlsx" \
-http://localhost:8081/api/processing/process-file
+http://localhost:8081/api/api/processing/process-file
 
 Ответ:
 json
@@ -149,7 +159,8 @@ json
 "message": "Файл успешно обработан",
 "totalRecords": 150,
 "processedSuccessfully": 145,
-"failed": 5
+"failed": 5,
+"successRate": "96.67%"
 }
 
 Статистика обработки
@@ -163,7 +174,8 @@ json
 {
 "totalProcessed": 1000,
 "successful": 950,
-"failed": 50
+"failed": 50,
+"successRate": 95.0
 }
 
 📈 3. ReportController - Отчеты и аналитика
@@ -174,33 +186,10 @@ http
 
 GET /api/reports/regional?startDate=2024-01-01&endDate=2024-01-31
 
-Пример:
-bash
-
-curl "http://localhost:8081/api/reports/regional?startDate=2024-01-01&endDate=2024-01-31"
-
 Комплексный отчет
 http
 
 GET /api/reports/comprehensive?startDate=2024-01-01&endDate=2024-01-31
-
-Ответ включает:
-json
-
-{
-"reportType": "COMPREHENSIVE",
-"totalFlights": 145,
-"droneTypeDistribution": {
-"BLA": 80,
-"SHAR": 45,
-"AER": 20
-},
-"regionalDistribution": {
-"Московская область": 42,
-"Санкт-Петербург": 38
-},
-"chartFilePath": "/tmp/chart123.png"
-}
 
 Топ регионов отчет
 http
@@ -220,141 +209,126 @@ GET /api/reports/chart?startDate=2024-01-01&endDate=2024-01-31&chartType=bar
 
     pie - круговая диаграмма
 
-Пример загрузки графика:
-bash
+Управление отчетами
+http
 
-curl "http://localhost:8081/api/reports/chart?startDate=2024-01-01&endDate=2024-01-31&chartType=bar" --output chart.png
+GET /api/reports/history              # История отчетов
+GET /api/reports/{reportId}          # Отчет по ID
+GET /api/reports/type/{reportType}   # Отчеты по типу
+GET /api/reports/statistics          # Статистика отчетов
 
-🔄 Workflow использования API
-Сценарий 1: Полный цикл обработки
+📁 Формат данных
+Структура Excel файла
 
-    Загрузка данных → POST /api/processing/process-file
+Файл должен содержать столбцы:
 
-    Анализ результатов → POST /api/analysis/top-regions
+    Центр ЕС ОрВД - центр управления полетами
 
-    Генерация отчетов → GET /api/reports/comprehensive
+    SHR - сырой текст SHR-телеграммы
 
-    Получение графиков → GET /api/reports/chart
+    DEP - сырой текст DEP-телеграммы
 
-Сценарий 2: Быстрый анализ
+    ARR - сырой текст ARR-телеграммы
 
-    Прямой анализ → POST /api/analysis/top-regions
-
-    Визуализация → GET /api/reports/chart
-
-🧪 Тестовые сценарии для фронтенда
-Тест 1: Загрузка и обработка файла
-javascript
-
-// 1. Загрузка файла
-const formData = new FormData();
-formData.append('file', excelFile);
-
-// 2. Обработка данных
-const processingResponse = await fetch('/api/processing/process-file', {
-method: 'POST',
-body: formData
-});
-
-// 3. Получение статистики
-const statsResponse = await fetch('/api/processing/stats');
-
-Тест 2: Анализ и визуализация
-javascript
-
-// 1. Анализ топ регионов
-const analysisResponse = await fetch('/api/analysis/top-regions', {
-method: 'POST',
-body: formData
-});
-
-// 2. Генерация графика
-const chartResponse = await fetch('/api/reports/chart?chartType=bar');
-const chartBlob = await chartResponse.blob();
-
-Тест 3: Комплексная отчетность
-javascript
-
-// 1. Получение комплексного отчета
-const reportResponse = await fetch('/api/reports/comprehensive?startDate=2024-01-01&endDate=2024-01-31');
-const reportData = await reportResponse.json();
-
-// 2. Отображение метрик
-console.log('Топ регионов:', reportData.regionalDistribution);
-console.log('Распределение по типам:', reportData.droneTypeDistribution);
-
-📊 Форматы ответов
-RegionAnalysisController
-json
-
-{
-"totalFlightsProcessed": 145,
-"failedGeolocation": 5,
-"topRegions": [
-{
-"rank": 1,
-"regionName": "Московская область",
-"flightCount": 42,
-"flightDensity": 0.95
-}
-]
-}
-
-FlightProcessingController
-json
-
-{
-"message": "Файл успешно обработан",
-"totalRecords": 150,
-"processedSuccessfully": 145,
-"failed": 5
-}
-
-ReportController
-json
-
-{
-"totalFlights": 145,
-"regionalDistribution": {
-"Московская область": 42,
-"Санкт-Петербург": 38
-},
-"dailyFlights": {
-"2024-01-01": 15,
-"2024-01-02": 20
-}
-}
-
-🚨 Ошибки и решение проблем
-Частые ошибки
-
-    Ошибка подключения к БД
-    text
-
-Connection to localhost:5432 refused
-
-Решение: Убедитесь, что PostgreSQL запущен и доступен
-
-Ошибка загрузки файла
+Пример формата телеграммы:
 text
 
-Required request part 'file' is not present
+SHR-RA2411G
+-ZZZZ1100
+-M0000/M0029 /ZONA 5943N02942E...
+-DEP/5935N02935E DEST/5938N02946E DOF/250105...
 
-Решение: Проверьте, что файл передается с правильным именем параметра
+🗄️ Модели данных
+Основные сущности
 
-Ошибка формата координат
+    RawTelegram - Сырые телеграммы из Excel
+
+    Flight - Обработанные данные полетов
+
+    Region - Регионы РФ с геоданными
+
+    ReportLog - История генерации отчетов
+
+    User - Пользователи системы
+
+🔧 Тестирование API
+1. Swagger документация
+
+После запуска приложения откройте:
+text
+
+http://localhost:8081/api/swagger-ui.html
+
+2. Примеры тестовых запросов
+
+Тест полного цикла:
+bash
+
+# 1. Обработка файла
+curl -X POST -F "file=@test_data.xlsx" http://localhost:8081/api/api/processing/process-file
+
+# 2. Анализ данных
+curl -X POST -F "file=@test_data.xlsx" http://localhost:8081/api/api/analysis/top-regions
+
+# 3. Генерация отчета
+curl "http://localhost:8081/api/api/reports/comprehensive?startDate=2024-01-01&endDate=2024-01-31"
+
+# 4. Получение графика
+curl "http://localhost:8081/api/api/reports/chart?startDate=2024-01-01&endDate=2024-01-31" --output chart.png
+
+🐳 Docker развертывание
+yaml
+
+version: '3.8'
+services:
+postgres:
+image: postgis/postgis:15-3.3
+environment:
+POSTGRES_DB: dronedb
+POSTGRES_USER: postgres
+POSTGRES_PASSWORD: password
+ports:
+- "5432:5432"
+
+app:
+build: .
+ports:
+- "8081:8081"
+environment:
+SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dronedb
+SPRING_DATASOURCE_USERNAME: postgres
+SPRING_DATASOURCE_PASSWORD: password
+depends_on:
+- postgres
+
+🚨 Troubleshooting
+Частые проблемы
+
+Доступ к Swagger:
+text
+
+Ошибка 403 Forbidden на /swagger-ui.html
+
+Решение: Настройка Spring Security для разрешения доступа к эндпоинтам Swagger
+
+Ошибка базы данных:
+text
+
+No property 'processingStatus' found for type 'Flight'
+
+Решение: Убедитесь, что поле processingStatus существует в сущности Flight
+
+Формат координат:
 text
 
 Ошибка создания точки из координат
 
-    Решение: Проверьте формат координат в Excel файле
+Решение: Проверьте формат координат в Excel файле (пример: "5957N02905E")
+📞 Интеграция
+Базовые URL:
 
-Логирование
+    Приложение: http://localhost:8081/api
 
-Уровни логирования можно настроить в application.yml:
-yaml
+    Swagger: http://localhost:8081/api/swagger-ui.html
 
-logging:
-level:
-com.drones.skilldrones: DEBUG
-org.hibernate.SQL: DEBUG
+    API Docs: http://localhost:8081/api/v3/api-docs

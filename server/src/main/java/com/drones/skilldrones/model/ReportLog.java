@@ -126,4 +126,12 @@ public class ReportLog {
     public void setCompletedAt(LocalDateTime completedAt) {
         this.completedAt = completedAt;
     }
+
+    // Вспомогательные методы
+    @PreUpdate
+    public void onUpdate() {
+        if (status == ReportStatus.COMPLETED || status == ReportStatus.FAILED) {
+            this.completedAt = LocalDateTime.now();
+        }
+    }
 }

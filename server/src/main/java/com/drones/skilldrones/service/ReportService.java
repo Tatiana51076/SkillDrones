@@ -1,32 +1,23 @@
 package com.drones.skilldrones.service;
 
+import com.drones.skilldrones.dto.response.ReportResponse;
+
 import java.io.File;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface ReportService {
-    /**
-     * Генерирует график статистики полетов
-     */
     File generateFlightsChart(LocalDate startDate, LocalDate endDate, String chartType);
-
-    /**
-     * Создает JSON отчет по региональной статистике
-     */
     String generateRegionalReport(LocalDate startDate, LocalDate endDate);
-
-    /**
-     * Генерирует комплексный отчет в нескольких форматах
-     */
     Map<String, Object> generateComprehensiveReport(LocalDate startDate, LocalDate endDate);
 
-    /**
-     * Генерирует отчет по топ-10 регионам
-     */
+    // Новые методы для работы с историей отчетов
+    List<ReportResponse> getReportHistory();
+    Optional<ReportResponse> getReportById(Long reportId);
+    List<ReportResponse> getReportsByType(String reportType);
+    List<ReportResponse> getCompletedReports();
+    ReportServiceImpl.ReportStatistics getReportStatistics();
     Map<String, Object> generateTopRegionsReport(LocalDate startDate, LocalDate endDate);
-
-    /**
-     * Генерирует временные ряды по полетам
-     */
-    Map<String, Object> generateTimeSeriesReport(LocalDate startDate, LocalDate endDate);
 }

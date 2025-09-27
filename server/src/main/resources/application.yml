@@ -55,3 +55,12 @@ app:
       height: ${APP_REPORT_IMAGE_HEIGHT:800}
     retention:
       days: ${APP_REPORT_RETENTION_DAYS:30}
+
+springdoc:
+  api-docs:
+    path: ${API_DOCS_PATH:/v3/api-docs}
+  swagger-ui:
+    path: ${SWAGGER_UI_PATH:/swagger-ui.html}
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha

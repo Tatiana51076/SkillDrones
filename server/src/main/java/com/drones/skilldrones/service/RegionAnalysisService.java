@@ -1,6 +1,7 @@
 package com.drones.skilldrones.service;
 
 import com.drones.skilldrones.dto.ParsedFlightData;
+import com.drones.skilldrones.dto.response.RegionResponse;
 import com.drones.skilldrones.model.Region;
 
 import java.time.LocalDate;
@@ -29,4 +30,8 @@ public interface RegionAnalysisService {
      * Возвращает простой список топ регионов (только названия и количество)
      */
     List<String> getSimpleTopRegions(List<ParsedFlightData> flightData);
+
+    List<RegionResponse> getAllRegions();
+
+    Optional<RegionResponse> getRegionById(Long regionId);
 }
