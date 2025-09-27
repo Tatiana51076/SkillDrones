@@ -58,7 +58,8 @@ CREATE INDEX idx_report_log_created_at ON report_log(created_at);
 CREATE TABLE IF NOT EXISTS flights (
     flight_id BIGSERIAL PRIMARY KEY,
     drone_id INT,
-    raw_id BIGINT REFERENCES raw_telegrams(id),
+    raw_id BIGINT REFERENCES raw_telegrams(id)
+    repot_id  report_id BIGINT NOT NULL REFERENCES report_log(report_id) ON DELETE CASCADE  ,
 
     -- Основная информация о полете
     flight_code VARCHAR(100), -- ID полета из телеграммы
@@ -93,7 +94,10 @@ CREATE INDEX idx_flights_departure_region ON flights(departure_region_id);
 CREATE INDEX idx_flights_arrival_region ON flights(arrival_region_id);
 CREATE INDEX idx_flights_date ON flights(flight_date);
 CREATE INDEX idx_flights_drone_type ON flights(drone_type);
-
+Индексы для быстрого поиска
+CREATE INDEX idx_report_flights_report_id ON report_flights(report_id);
+CREATE INDEX idx_report_flights_flight_id ON report_flights(flight_id);
+CREATE INDEX idx_report_flights_composite ON report_flights(report_id, flight_id)
 -- Таблица для хранения предварительно рассчитанных метрик (оптимизация производительности)
 CREATE TABLE IF NOT EXISTS region_metrics (
     metric_id BIGSERIAL PRIMARY KEY,
