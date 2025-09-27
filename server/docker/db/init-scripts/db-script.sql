@@ -58,8 +58,8 @@ CREATE INDEX idx_report_log_created_at ON report_log(created_at);
 CREATE TABLE IF NOT EXISTS flights (
     flight_id BIGSERIAL PRIMARY KEY,
     drone_id INT,
-    raw_id BIGINT REFERENCES raw_telegrams(id),
-
+    raw_id BIGINT REFERENCES raw_telegrams(id)
+    report_id BIGINT REFERENCES reportlog(id),
     -- Основная информация о полете
     flight_code VARCHAR(100), -- ID полета из телеграммы
     drone_type VARCHAR(100),
